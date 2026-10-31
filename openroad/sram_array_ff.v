@@ -7,6 +7,9 @@ module sram_array #(
 ) (
     input               clk,
     input               we,
+    /* verilator lint_off UNUSEDSIGNAL */
+    input               re,            // read strobe: only the fault model uses it
+    /* verilator lint_on UNUSEDSIGNAL */
     input  [ROWB:0]     prow,
     input  [COLB-1:0]   col,
     input  [DW-1:0]     wdata,
