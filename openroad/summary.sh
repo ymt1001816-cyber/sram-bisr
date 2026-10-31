@@ -6,6 +6,4 @@ echo "== setup (finish)";          grep -h -E "^(tns|wns|worst slack) max" $R 2>
 echo "== power (default activity)"; grep -h -m1 "Total power" $D/logs/6_report.log 2>/dev/null
 echo "== detailed route DRC";      grep -h -E "Number of violations" $D/logs/5_2_route.log 2>/dev/null | tail -1
 echo "== equivalence (ORFS LEC)";  grep -h "passed lec test\|failed lec test" $D/logs/*.log 2>/dev/null
-echo "== synthesis area per module (um^2)"
-S=$(ls $D/reports/synth_stat.txt 2>/dev/null)
-[ -n "$S" ] && grep -E "^=== |Chip area" $S
+echo "== area by module (um^2): see area_by_module.sh below"

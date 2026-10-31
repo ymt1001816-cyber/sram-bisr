@@ -26,6 +26,9 @@ jobs:
           F=/OpenROAD-flow-scripts/flow; O=$GITHUB_WORKSPACE/build/openroad; mkdir -p $O
           for d in reports logs results; do cp -r $F/$d/nangate45/sram_bisr/base $O/$d 2>/dev/null || true; done
           bash $GITHUB_WORKSPACE/openroad/summary.sh $O | tee $O/summary.txt
+          mkdir -p $GITHUB_WORKSPACE/build
+          bash $GITHUB_WORKSPACE/openroad/area_by_module.sh $F/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib \
+            | tee -a $O/summary.txt || true
           { echo '```'; cat $O/summary.txt; echo '```'; } >> $GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         if: always()
