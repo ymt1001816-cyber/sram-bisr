@@ -1,0 +1,23 @@
+# repair.sby : SymbiYosys for the repair logic (bira + repair_remap), see repair_props.sv
+#   prove : k-induction, unbounded
+#   cover : a full table, an unrepairable memory and a remap to spare 1 are reachable (prove is not vacuous)
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+cover: mode cover
+depth 12
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal bira.v repair_remap.v repair_props.sv
+prep -top repair_props
+
+[files]
+../rtl/bira.v
+../rtl/repair_remap.v
+repair_props.sv

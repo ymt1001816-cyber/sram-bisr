@@ -1,0 +1,15 @@
+# ci.yml : run the regression on every push and pull request
+name: regression
+on: [push, pull_request]
+jobs:
+  regress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3    # Verilator, Icarus Verilog, cocotb, Yosys, SymbiYosys, Yices
+      - run: ci/regress.sh all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: build/*.log

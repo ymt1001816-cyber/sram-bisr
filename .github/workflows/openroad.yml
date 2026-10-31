@@ -1,0 +1,34 @@
+# openroad.yml : open-source RTL-to-GDS (OpenROAD-flow-scripts, nangate45) for sram_bisr (repair-logic area next to the memory)
+#   runs on demand (Actions tab -> openroad -> Run workflow) and when openroad/ or the RTL changes
+name: openroad
+on:
+  workflow_dispatch:
+  push:
+    paths: ['openroad/**', 'rtl/**', '.github/workflows/openroad.yml']
+jobs:
+  rtl2gds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container: openroad/orfs:26Q4-229-g64939f371     # pinned ORFS image: Yosys + OpenROAD + KLayout
+    defaults:
+      run:
+        shell: bash                     # the container's default sh has no 'source'
+    steps:
+      - uses: actions/checkout@v4
+      - name: RTL to GDS
+        run: |
+          cd /OpenROAD-flow-scripts && [ -f env.sh ] && source ./env.sh
+          make -C flow DESIGN_CONFIG=$GITHUB_WORKSPACE/openroad/config.mk REPO=$GITHUB_WORKSPACE
+      - name: Collect results
+        if: always()
+        run: |
+          cd /OpenROAD-flow-scripts && [ -f env.sh ] && source ./env.sh
+          F=/OpenROAD-flow-scripts/flow; O=$GITHUB_WORKSPACE/build/openroad; mkdir -p $O
+          for d in reports logs results; do cp -r $F/$d/nangate45/sram_bisr/base $O/$d 2>/dev/null || true; done
+          bash $GITHUB_WORKSPACE/openroad/summary.sh $O | tee $O/summary.txt
+          { echo '```'; cat $O/summary.txt; echo '```'; } >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: openroad-sram_bisr
+          path: build/openroad
