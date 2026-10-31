@@ -16,9 +16,8 @@ module repair_remap #(parameter ROWB = 4, SPARES = 2) (
     //   (spare i is SPARE0 + i[ROWB:0])
     always @(*) begin
         prow = {1'b0, row};
-        if (en)
-            for (i = 0; i < SPARES; i = i + 1)
-                if (valid[i] && rows[i*ROWB +: ROWB] == row)
-                    prow = SPARE0 + i[ROWB:0];
+        for (i = 0; i < SPARES; i = i + 1)   // loop always runs, so i is assigned on every path (no latch)
+            if (en && valid[i] && rows[i*ROWB +: ROWB] == row)
+                prow = SPARE0 + i[ROWB:0];
     end
 endmodule
