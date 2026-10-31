@@ -123,16 +123,17 @@ Cell area by module (nangate45, synthesis, `openroad/area_by_module.sh`):
 
 | Block | Area (µm²) | Share |
 |---|---:|---:|
-| Memory array (16 rows + 2 spare rows, flip-flops) | 4,507 | 91.7% |
-| March C- MBIST controller | 170 | 3.5% |
+| Memory array (16 rows + 2 spare rows, flip-flops) | 4,438 | 90.2% |
+| Programmable March MBIST (4 algorithms) | 245 | 5.0% |
 | BIRA repair table | 106 | 2.1% |
 | Row remap | 27 | 0.5% |
-| BISR state machine and port mux | 106 | 2.2% |
-| **Total** | **4,916** | |
+| BISR state machine and port mux | 107 | 2.2% |
+| **Total** | **4,922** | |
 
-The self-test and repair logic is **8.3%** of the total here, and the two spare rows add another 2/18 of the array
-(about 500 µm²). After place and route: 5,607 µm² of cells, setup met at 200 MHz (worst slack 2.93 ns), 0 routing DRC
-violations, and the layout netlist passes the equivalence check.
+The self-test and repair logic is **9.8%** of the total here, and the two spare rows add another 2/18 of the array
+(about 500 µm²). After place and route: 5,739 µm² of cells, setup met at 200 MHz (worst slack 3.16 ns), 0 routing DRC
+violations, and the layout netlist passes the equivalence check. Making the MBIST programmable cost 75 µm² over the
+fixed March C- controller (170 → 245 µm²), about 1.5% of the design.
 
 ## Run it
 
