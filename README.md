@@ -74,6 +74,21 @@ a real SRAM bit cell is several times smaller than a flip-flop, so the overhead 
 compiled SRAM macro of this size, and smaller for a realistic memory of many kilobits, where the repair logic grows only
 with the number of spares and address bits.
 
+Cell area by module (nangate45, synthesis, `openroad/area_by_module.sh`):
+
+| Block | Area (µm²) | Share |
+|---|---:|---:|
+| Memory array (16 rows + 2 spare rows, flip-flops) | 4,507 | 91.7% |
+| March C- MBIST controller | 170 | 3.5% |
+| BIRA repair table | 106 | 2.1% |
+| Row remap | 27 | 0.5% |
+| BISR state machine and port mux | 106 | 2.2% |
+| **Total** | **4,916** | |
+
+The self-test and repair logic is **8.3%** of the total here, and the two spare rows add another 2/18 of the array
+(about 500 µm²). After place and route: 5,607 µm² of cells, setup met at 200 MHz (worst slack 2.93 ns), 0 routing DRC
+violations, and the layout netlist passes the equivalence check.
+
 ## Run it
 
 Needs [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) (Verilator, Icarus Verilog, cocotb, Yosys, SymbiYosys).
