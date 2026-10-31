@@ -6,3 +6,7 @@ build/
 .DS_Store
 GUIDE.md
 formal/*/
+tb/sim_build_cov/
+tb/results_cov.xml
+tb/coverage_table.md
+tb/cov.log

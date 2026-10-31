@@ -1,0 +1,28 @@
+# equiv.sby : programmable MBIST (alg = March C-) vs the original mbist_march.v, see equiv_march.sv
+#   bmc   : identical for 2 complete runs (8 words: one run is 10N = 80 cycles)
+#   prove : k-induction, identical forever
+#   cover : a complete run, and a failing run, are reachable
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 170
+prove: mode prove
+prove: depth 20
+cover: mode cover
+cover: depth 90
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal mbist_march.v mbist_prog.v equiv_march.sv
+prep -top equiv_march
+
+[files]
+../rtl/mbist_march.v
+../rtl/mbist_prog.v
+equiv_march.sv

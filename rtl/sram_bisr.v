@@ -10,6 +10,7 @@ module sram_bisr #(
 ) (
     input                     clk, rst_n,
     input                     bist_start,
+    input  [1:0]              alg,
     output reg                bist_done,
     output reg [1:0]          bist_status,
     output     [SPARES-1:0]   spares_used,
@@ -24,7 +25,7 @@ module sram_bisr #(
 
     reg  [2:0] state;
     reg        m_start;
-    wire       m_done, m_fail, m_we, m_err;
+    wire       m_done, m_fail, m_we, m_re, m_err;
     wire [AW-1:0] m_addr;
     /* verilator lint_off UNUSEDSIGNAL */   // repair is per row: the column bits of the failing address are not needed
     wire [AW-1:0] m_err_addr;
@@ -42,14 +43,14 @@ module sram_bisr #(
     wire [ROWB:0] prow;
     wire [DW-1:0] a_rd;
 
-    mbist_march #(.AW(AW), .DW(DW)) u_mbist (.clk(clk), .rst_n(rst_n), .start(m_start), .done(m_done), .fail(m_fail),
-        .mem_we(m_we), .mem_addr(m_addr), .mem_wdata(m_wdata), .mem_rdata(a_rd), .err(m_err), .err_addr(m_err_addr));
+    mbist_prog #(.AW(AW), .DW(DW)) u_mbist (.clk(clk), .rst_n(rst_n), .start(m_start), .alg(alg), .done(m_done), .fail(m_fail),
+        .mem_we(m_we), .mem_re(m_re), .mem_addr(m_addr), .mem_wdata(m_wdata), .mem_rdata(a_rd), .err(m_err), .err_addr(m_err_addr));
     bira #(.ROWB(ROWB), .SPARES(SPARES)) u_bira (.clk(clk), .rst_n(rst_n), .clear(bist_start && !bist_active),
         .en(state == T1 || state == T1_WAIT), .err(m_err), .err_row(m_err_addr[AW-1:COLB]),
         .valid(valid), .rows(rows), .unrepairable(unrep));
     repair_remap #(.ROWB(ROWB), .SPARES(SPARES)) u_remap (.en(remap_en), .row(a_addr[AW-1:COLB]),
         .valid(valid), .rows(rows), .prow(prow));
-    sram_array #(.ROWB(ROWB), .COLB(COLB), .DW(DW), .SPARES(SPARES)) u_mem (.clk(clk), .we(a_we),
+    sram_array #(.ROWB(ROWB), .COLB(COLB), .DW(DW), .SPARES(SPARES)) u_mem (.clk(clk), .we(a_we), .re(bist_active && m_re),
         .prow(prow), .col(a_addr[COLB-1:0]), .wdata(a_wd), .rdata(a_rd));
     assign rdata = a_rd;
     assign spares_used = valid;

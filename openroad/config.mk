@@ -5,7 +5,7 @@
 export PLATFORM        = nangate45
 export DESIGN_NAME     = sram_bisr
 export DESIGN_NICKNAME = sram_bisr
-export VERILOG_FILES   = $(REPO)/rtl/sram_bisr.v $(REPO)/rtl/mbist_march.v $(REPO)/rtl/bira.v \
+export VERILOG_FILES   = $(REPO)/rtl/sram_bisr.v $(REPO)/rtl/mbist_prog.v $(REPO)/rtl/bira.v \
                          $(REPO)/rtl/repair_remap.v $(REPO)/openroad/sram_array_ff.v
 export SDC_FILE        = $(REPO)/openroad/constraint.sdc
 export SYNTH_HIERARCHICAL = 1

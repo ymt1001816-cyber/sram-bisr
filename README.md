@@ -3,9 +3,12 @@
 [![regression](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/ci.yml/badge.svg)](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/ci.yml)
 [![openroad](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/openroad.yml/badge.svg)](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/openroad.yml)
 
-An SRAM that tests and repairs itself: a March C- memory BIST finds faulty cells, built-in redundancy analysis decides
-which rows to replace, the address path remaps those rows to spare rows, and a second March run checks the repair.
+An SRAM that tests and repairs itself: a programmable memory BIST finds faulty cells, built-in redundancy analysis
+decides which rows to replace, the address path remaps those rows to spare rows, and a second March run checks the repair.
 This is the soft-repair flow that production memories use to recover yield.
+
+The BIST runs any of four March algorithms from a small table, and a fault-injection experiment measures what each one
+catches: **March C- misses read- and write-disturb faults (0% and 51%) that March SS catches, at 2.2× the test time.**
 
 Meiyu Kuo · personal project, 2026
 
@@ -27,14 +30,56 @@ flowchart LR
 
 `bist_start` runs:
 
-1. **Test 1:** March C- (10N operations) over the logical address space, remap off. Every wrong read reports its row to BIRA.
+1. **Test 1:** the selected March algorithm (`alg`, default March C-) over the logical address space, remap off. Every wrong read reports its row to BIRA.
 2. **Analysis (BIRA):** a table of `{valid, row}` entries, one per spare. A row already in the table is ignored (a bad row
    fails many reads), a new row takes the first free entry, and a new row with no free entry marks the memory unrepairable.
 3. **Repair:** the remap logic sends every access to a recorded row to its spare row instead.
-4. **Test 2:** March C- again, through the remap. This checks the spare rows themselves and the remap logic.
+4. **Test 2:** the same algorithm again, through the remap. This checks the spare rows themselves and the remap logic.
 
 `bist_status` reports **PASS** (no fault), **REPAIRED** (faults found and fixed) or **FAIL** (more bad rows than spares,
 or test 2 fails). The SRAM is 16 rows × 4 words × 8 bits with 2 spare rows; all sizes are parameters.
+
+## Programmable MBIST and March algorithm comparison
+
+`rtl/mbist_prog.v` stores each algorithm as a list of march elements, `{direction, number of operations, up to 5
+operations}`, and one sequencer runs whichever list `alg` selects:
+
+| `alg` | Algorithm | Length | Elements |
+|---|---|---|---|
+| 0 | MATS+ | 5N | ⇕(w0) ⇑(r0,w1) ⇓(r1,w0) |
+| 1 | March X | 6N | ⇕(w0) ⇑(r0,w1) ⇓(r1,w0) ⇕(r0) |
+| 2 | March C- | 10N | ⇕(w0) ⇑(r0,w1) ⇑(r1,w0) ⇓(r0,w1) ⇓(r1,w0) ⇕(r0) |
+| 3 | March SS | 22N | ⇕(w0) ⇑(r0,r0,w0,r0,w1) ⇑(r1,r1,w1,r1,w0) ⇓(r0,r0,w0,r0,w1) ⇓(r1,r1,w1,r1,w0) ⇕(r0) |
+
+**Fault coverage** (`tb/test_march_cov.py`): for each fault type, 100 random instances are injected one at a time
+(random cell, random aggressor word, random power-up contents, coupling sensitized by a rising or falling write),
+and every algorithm runs on the same instances:
+
+| Fault | MATS+ (5N) | March X (6N) | March C- (10N) | March SS (22N) |
+|---|---:|---:|---:|---:|
+| stuck-at-0 | 100% | 100% | 100% | 100% |
+| stuck-at-1 | 100% | 100% | 100% | 100% |
+| transition 0→1 | 100% | 100% | 100% | 100% |
+| transition 1→0 | 42% | 100% | 100% | 100% |
+| inversion coupling (CFin) | 74% | 100% | 100% | 100% |
+| idempotent coupling (CFid) | 30% | 48% | 100% | 100% |
+| state coupling (CFst) | 48% | 48% | 100% | 100% |
+| address decoder (AF) | 100% | 100% | 100% | 100% |
+| read destructive (RDF) | 100% | 100% | 100% | 100% |
+| deceptive read destructive (DRDF) | 0% | 0% | 0% | 100% |
+| write destructive (WDF) | 51% | 51% | 51% | 100% |
+
+- MATS+ ends with w0 and never reads it back, so a cell that cannot fall to 0 is caught only when it powered up at 0.
+- March C- reads each cell once per element: a deceptive read-destructive fault returns the right value, flips the
+  cell, and is never seen. March SS reads twice in a row (r0, r0) and catches it on the second read.
+- March C- never writes a value a cell already holds, so a write-destructive fault is caught only by chance (when the
+  first w0 lands on a cell that powered up at 0). March SS does r0, w0, r0.
+
+**Equivalence:** `formal/equiv.sby` proves that the programmable engine running March C- matches the original hand-written
+controller (`rtl/mbist_march.v`, from my cache project) cycle by cycle, for any memory read data: bounded over two
+complete runs, and unbounded by k-induction for an 8-word memory (the logic is identical for any size; at 64 words the
+induction depth would have to exceed one march element). A wrong direction, swapped operations or a missing element
+all fail the check.
 
 ## Verification
 
@@ -94,8 +139,9 @@ violations, and the layout netlist passes the equivalence check.
 Needs [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) (Verilator, Icarus Verilog, cocotb, Yosys, SymbiYosys).
 
 ```bash
-ci/regress.sh all                 # lint, simulation (3 seeds x 9 tests), formal: 6 checks
-cd tb && make                     # simulation only  (ROUNDS=random rounds, COCOTB_RANDOM_SEED=n)
+ci/regress.sh all                 # lint, simulation, March coverage, formal: 10 checks
+cd tb && make                     # repair tests  (ALG=0..3, ROUNDS=random rounds, COCOTB_RANDOM_SEED=n)
+cd tb && make -f Makefile.cov SAMPLES=100   # March algorithm coverage table (CI uses 40 per fault type)
 cd formal && sby -f repair.sby prove
 ```
 
@@ -106,12 +152,13 @@ The same checks run in GitHub Actions on every push.
 | Path | Contents |
 |---|---|
 | `rtl/sram_bisr.v` | top: BISR state machine, memory port mux |
-| `rtl/mbist_march.v` | March C- controller (from my [cache project](https://github.com/ymt1001816-cyber/cache-rtl-to-signoff)), plus per-read error output |
+| `rtl/mbist_prog.v` | programmable March BIST: MATS+, March X, March C-, March SS |
+| `rtl/mbist_march.v` | the original March C- controller (from my [cache project](https://github.com/ymt1001816-cyber/cache-rtl-to-signoff)), the reference for the equivalence check |
 | `rtl/bira.v` | built-in redundancy analysis: the repair table |
 | `rtl/repair_remap.v` | logical row → physical row |
-| `model/sram_array.v` | behavioral SRAM with spare rows and fault injection (stuck-at, transition, coupling, column) |
-| `tb/` | cocotb testbench and Makefile |
-| `formal/` | properties of the repair logic (`repair_props.sv`, `repair.sby`) |
+| `model/sram_array.v` | behavioral SRAM with spare rows and 12 injectable fault types (stuck-at, transition, coupling, decoder, read / write disturb, column) |
+| `tb/` | cocotb repair tests, March coverage experiment (`test_march_cov.py`, `mbist_cov_top.v`) |
+| `formal/` | repair-logic proof (`repair.sby`), MBIST equivalence check (`equiv.sby`) |
 | `openroad/` | OpenROAD config, constraints, flip-flop memory stand-in |
 | `ci/regress.sh` | regression script used by CI |
 

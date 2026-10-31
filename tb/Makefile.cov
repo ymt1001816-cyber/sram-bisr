@@ -1,0 +1,11 @@
+# Makefile.cov : March algorithm fault-coverage experiment (test_march_cov.py)
+#   make -f Makefile.cov  [SAMPLES=fault instances per type]
+SIM ?= icarus
+TOPLEVEL_LANG = verilog
+TOPLEVEL = mbist_cov_top
+COCOTB_TEST_MODULES = test_march_cov
+VERILOG_SOURCES = mbist_cov_top.v ../rtl/mbist_prog.v ../model/sram_array.v
+SIM_BUILD = sim_build_cov
+COCOTB_RESULTS_FILE = results_cov.xml
+COCOTB_HDL_TIMEPRECISION = 1ps
+include $(shell cocotb-config --makefiles)/Makefile.sim

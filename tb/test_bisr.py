@@ -25,6 +25,8 @@ class Tb:
         cocotb.start_soon(Clock(d.clk, 10, unit="ns").start())
         d.rst_n.value = 0; d.bist_start.value = 0; d.we.value = 0; d.addr.value = 0; d.wdata.value = 0
         self.clear_faults()                                 # faults from the previous test stay in the model otherwise
+        if hasattr(d, "alg"):                               # programmable MBIST: ALG=0..3, default March C-
+            d.alg.value = int(os.environ.get("ALG", "2"))
         for _ in range(3):
             await RisingEdge(d.clk)
         d.rst_n.value = 1
