@@ -1,0 +1,11 @@
+# Makefile.2d : cocotb testbench for the 2D self-repair (test_bisr2d.py)
+#   make -f Makefile.2d  [ALG=0..3]  [ROUNDS=random fault maps]  [RA_SEED=n]
+SIM ?= icarus
+TOPLEVEL_LANG = verilog
+TOPLEVEL = sram_bisr2d
+COCOTB_TEST_MODULES = test_bisr2d
+VERILOG_SOURCES = ../rtl/sram_bisr2d.v ../rtl/bira2d.v ../rtl/mbist_prog.v ../rtl/repair_remap.v ../model/sram_array.v
+SIM_BUILD = sim_build_2d
+COCOTB_RESULTS_FILE = results_2d.xml
+COCOTB_HDL_TIMEPRECISION = 1ps
+include $(shell cocotb-config --makefiles)/Makefile.sim

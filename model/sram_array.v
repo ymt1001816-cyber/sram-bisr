@@ -3,6 +3,8 @@
 //   (2**ROWB + SPARES) rows x 2**COLB words per row x DW bits; rows 2**ROWB .. are the spare rows
 //   write: synchronous (posedge clk, we = 1)     read: combinational (rdata = word at prow / col);
 //   re = 1 marks a read cycle (read-disturb faults act at the end of it; leave unconnected if unused)
+//   SCOLS spare bit-columns: spare column k is one extra bit per physical row, written when sc_we[k] = 1 (with
+//   sc_wdata[k]) and read on sc_rdata[k]; the repair logic decides which bit it stands in for (unused: leave open)
 //   up to NF faults, set from the testbench through f_type / f_row / f_col / f_bit / f_arow / f_acol / f_val.
 //   cell = (f_row, f_col, bit f_bit); aggressor = (f_arow, f_acol, the same bit):
 //      0 none
@@ -17,8 +19,9 @@
 //     10 deceptive read destructive DRDF: a read returns the right value but flips the cell
 //     11 write destructive WDF: a write that does not change the cell (0 over 0, 1 over 1) flips it
 //     12 address decoder AF: a write to the aggressor word also writes the cell's word
+//     13 spare column stuck-at: spare column f_col, row f_row reads f_val
 module sram_array #(
-    parameter ROWB = 4, COLB = 2, DW = 8, SPARES = 2, NF = 4
+    parameter ROWB = 4, COLB = 2, DW = 8, SPARES = 2, SCOLS = 2, NF = 8
 ) (
     input               clk,
     input               we,
@@ -26,10 +29,14 @@ module sram_array #(
     input  [ROWB:0]     prow,          // physical row: 0 .. 2**ROWB + SPARES - 1
     input  [COLB-1:0]   col,
     input  [DW-1:0]     wdata,
-    output [DW-1:0]     rdata
+    output [DW-1:0]     rdata,
+    input  [SCOLS-1:0]  sc_we,
+    input  [SCOLS-1:0]  sc_wdata,
+    output [SCOLS-1:0]  sc_rdata
 );
     localparam NROW = (1 << ROWB) + SPARES;
     reg [DW-1:0] mem [0:NROW * (1 << COLB) - 1];
+    reg [NROW-1:0] scol [0:SCOLS-1];               // spare column k: one bit per physical row
     reg [3:0]      f_type [0:NF-1];
     reg [ROWB:0]   f_row  [0:NF-1], f_arow [0:NF-1];
     reg [COLB-1:0] f_col  [0:NF-1], f_acol [0:NF-1];
@@ -81,4 +88,17 @@ module sram_array #(
         end
     end
     assign rdata = r;
+
+    // spare columns
+    integer k;
+    always @(posedge clk)
+        for (k = 0; k < SCOLS; k = k + 1)
+            if (we && sc_we[k] === 1'b1) scol[k][prow] <= sc_wdata[k];
+    reg [SCOLS-1:0] sr;
+    always @(*) begin
+        for (k = 0; k < SCOLS; k = k + 1) sr[k] = scol[k][prow];
+        for (i = 0; i < NF; i = i + 1)
+            if (f_type[i] == 13 && f_col[i] < SCOLS && prow == f_row[i]) sr[f_col[i]] = f_val[i];
+    end
+    assign sc_rdata = sr;
 endmodule

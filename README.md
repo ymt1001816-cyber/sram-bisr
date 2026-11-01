@@ -1,4 +1,4 @@
-# SRAM Built-In Self-Repair (MBIST + BIRA + Row Repair)
+# SRAM Built-In Self-Repair (MBIST + 2D Redundancy Analysis + Row/Column Repair)
 
 [![regression](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/ci.yml/badge.svg)](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/ci.yml)
 [![openroad](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/openroad.yml/badge.svg)](https://github.com/ymt1001816-cyber/sram-bisr/actions/workflows/openroad.yml)
@@ -9,6 +9,9 @@ This is the soft-repair flow that production memories use to recover yield.
 
 The BIST runs any of four March algorithms from a small table, and a fault-injection experiment measures what each one
 catches: **March C- misses read- and write-disturb faults (0% and 51%) that March SS catches, at 2.2× the test time.**
+
+A second version adds spare bit-columns and 2D redundancy analysis: **with the same four spare lines, 2 rows + 2 columns
+repair 99.8% of memories with line faults, against 66% with rows only.**
 
 Meiyu Kuo · personal project, 2026
 
@@ -81,6 +84,37 @@ complete runs, and unbounded by k-induction for an 8-word memory (the logic is i
 induction depth would have to exceed one march element). A wrong direction, swapped operations or a missing element
 all fail the check.
 
+## Spare columns and 2D redundancy analysis
+
+Spare rows cannot fix a broken bit line (the column-fault test above fails). `rtl/sram_bisr2d.v` adds 2 spare bit-columns
+next to the 2 spare rows; a replaced bit of a word is written to and read from its spare column instead of the array.
+
+**Which allocator?** Choosing rows and columns to cover a fault map is NP-complete in general, so `analysis/` compares
+allocators in Python first (16 rows × 32 bit-columns, 2000 random fault maps per point; the exhaustive allocator is
+checked against brute force):
+
+| Faults | Rows only (4 spare rows) | Greedy (2 + 2) | Must-repair + greedy (2 + 2) | Exhaustive optimum (2 + 2) |
+|---:|---:|---:|---:|---:|
+| 5 random cells | 49.6% | 63.9% | 63.9% | 63.9% |
+| 6 random cells | 19.9% | 31.3% | 31.3% | 31.6% |
+| 4, 20% of them whole broken lines | 66.2% | 99.8% | 99.8% | 99.8% |
+| 5, 20% of them whole broken lines | 29.6% | 55.5% | 55.5% | 55.5% |
+
+Columns pay off most when whole lines fail, and greedy stays within 0.4% of the optimum, so the hardware
+(`rtl/bira2d.v`) uses it:
+
+1. **During test 1:** each wrong read reports its failing bits; the lowest bit not yet covered is the new fault. If its
+   row now has more faults than the spare columns left can fix, the row must take a spare row right away (and the same
+   for columns). Otherwise the fault goes into an 8-entry table.
+2. **After test 1:** one line per cycle, the row or column with the most faults left in the table, until the table is
+   empty (then test 2 runs through the row and column repair) or no spare fits (FAIL).
+
+`tb/test_bisr2d.py` checks broken bit lines, a row that must take a spare row, a faulty spare column, and random maps of
+2 to 8 faults against the Python models: whenever no 2 + 2 repair exists the hardware must report FAIL, every REPAIRED
+memory must pass random reads and writes, and the hardware repaired exactly the maps the greedy and exhaustive models
+repair (84 of 150). Must-repair in the analysis phase turned out to change nothing (greedy picks the same line), so it
+was removed from the hardware.
+
 ## Verification
 
 **Simulation** (`tb/test_bisr.py`, cocotb + Icarus Verilog). The memory model (`model/sram_array.v`) takes injected faults.
@@ -140,7 +174,9 @@ fixed March C- controller (170 → 245 µm²), about 1.5% of the design.
 Needs [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) (Verilator, Icarus Verilog, cocotb, Yosys, SymbiYosys).
 
 ```bash
-ci/regress.sh all                 # lint, simulation, March coverage, formal: 10 checks
+ci/regress.sh all                 # lint, simulation, March coverage, 2D repair, formal: 13 checks
+cd tb && make -f Makefile.2d       # 2D repair tests  (ROUNDS=random fault maps)
+cd analysis && python3 monte_carlo.py   # allocator comparison table
 cd tb && make                     # repair tests  (ALG=0..3, ROUNDS=random rounds, COCOTB_RANDOM_SEED=n)
 cd tb && make -f Makefile.cov SAMPLES=100   # March algorithm coverage table (CI uses 40 per fault type)
 cd formal && sby -f repair.sby prove
@@ -157,16 +193,19 @@ The same checks run in GitHub Actions on every push.
 | `rtl/mbist_march.v` | the original March C- controller (from my [cache project](https://github.com/ymt1001816-cyber/cache-rtl-to-signoff)), the reference for the equivalence check |
 | `rtl/bira.v` | built-in redundancy analysis: the repair table |
 | `rtl/repair_remap.v` | logical row → physical row |
+| `rtl/sram_bisr2d.v`, `rtl/bira2d.v` | 2D version: spare rows + spare bit-columns, on-the-fly must-repair and greedy allocation |
+| `analysis/` | Python allocators (rows only, greedy, must-repair + greedy, exhaustive), Monte Carlo, tests |
 | `model/sram_array.v` | behavioral SRAM with spare rows and 12 injectable fault types (stuck-at, transition, coupling, decoder, read / write disturb, column) |
-| `tb/` | cocotb repair tests, March coverage experiment (`test_march_cov.py`, `mbist_cov_top.v`) |
+| `tb/` | cocotb repair tests (`test_bisr.py`, 2D: `test_bisr2d.py`), March coverage experiment (`test_march_cov.py`) |
 | `formal/` | repair-logic proof (`repair.sby`), MBIST equivalence check (`equiv.sby`) |
 | `openroad/` | OpenROAD config, constraints, flip-flop memory stand-in |
 | `ci/regress.sh` | regression script used by CI |
 
 ## Limitations
 
-- Row repair only. Production memories also have spare columns (for bit-line faults such as the one above), and
-  allocating both kinds is NP-hard in general; with row spares only, the greedy allocation used here is optimal.
+- The 2D version records at most one new faulty bit per read and keeps 8 table entries; a March reads every word
+  several times, and anything missed makes test 2 fail (FAIL, never a false REPAIRED). Its area is not yet measured
+  in the OpenROAD flow, which runs the row-only version.
 - Soft repair: the repair table is rebuilt by every self-test (for example at power-up) instead of being burned into eFuses.
 - Unused spare rows are not tested before they are needed; test 2 covers every spare that is actually used.
 - The SRAM is a behavioral model with combinational read, not a compiled macro.

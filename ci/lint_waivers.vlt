@@ -1,3 +1,5 @@
 `verilator_config
 // model/sram_array.v is a behavioral memory model with fault injection (stands in for a macro), not synthesized RTL
 lint_off -file "*model/sram_array.v"
+// the row-only design (sram_bisr.v) has no spare columns, so it leaves the memory's spare-column ports open
+lint_off -rule PINMISSING -file "*rtl/sram_bisr.v"

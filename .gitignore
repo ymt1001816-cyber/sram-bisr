@@ -10,3 +10,7 @@ tb/sim_build_cov/
 tb/results_cov.xml
 tb/coverage_table.md
 tb/cov.log
+__pycache__/
+.pytest_cache/
+tb/sim_build_2d/
+tb/results_2d.xml
