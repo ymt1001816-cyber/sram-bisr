@@ -23,3 +23,9 @@ def test_every_answer_is_a_real_repair():
         for name, fn in ALLOCATORS.items():
             sr, sc = (4, 0) if name == "row only" else (2, 2)
             assert check(f, fn(f, 2, 2), sr, sc), name
+
+
+if __name__ == "__main__":         # also runs without pytest (python3 test_redundancy.py)
+    test_optimal_matches_brute_force()
+    test_every_answer_is_a_real_repair()
+    print("2 passed")

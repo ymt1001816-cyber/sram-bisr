@@ -23,7 +23,7 @@ if [[ $what == sim || $what == all ]]; then   # 9 repair tests (3 seeds, then Ma
   check "march coverage: 4 algorithms x 11 fault types, March C- and March SS detect what they are designed for" build/march_cov.log "FAIL=0 SKIP="
 fi
 if [[ $what == 2d || $what == all ]]; then    # spare rows + spare columns: Python models, then the RTL against them
-  (cd analysis && python3 -m pytest -q test_redundancy.py > ../build/analysis.log 2>&1)
+  (cd analysis && python3 test_redundancy.py > ../build/analysis.log 2>&1)
   check "analysis: exhaustive allocator = brute force, every allocator returns a real repair" build/analysis.log " passed"
   (cd tb && rm -rf sim_build_2d && make -f Makefile.2d ROUNDS=100 > ../build/sim_2d.log 2>&1)
   check "sim 2d: bit-line and must-repair cases, 100 random fault maps vs the greedy and exhaustive models" build/sim_2d.log "FAIL=0 SKIP="
